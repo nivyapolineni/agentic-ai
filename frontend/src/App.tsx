@@ -1,6 +1,6 @@
 import React, { useState, type ChangeEvent } from 'react';
 import axios from 'axios';
-import { Upload, FileText, User, Calendar, Hash, Globe, Loader2, CheckCircle2 } from 'lucide-react';
+import { Upload, FileText, User, Calendar, Hash, Globe, Loader2, CheckCircle2, Download } from 'lucide-react';
 
 interface PassportData {
   firstName: string;
@@ -21,7 +21,9 @@ function App() {
     passportNumber: '',
   });
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -63,38 +65,98 @@ function App() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handlePdfFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPdfFile(file);
+    }
+  };
+
+  const handleGeneratePdf = async () => {
+    if (!pdfFile) {
+      alert("Please upload a target PDF form first.");
+      return;
+    }
+
+    setPdfLoading(true);
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+    const uploadData = new FormData();
+    uploadData.append('template', pdfFile);
+    uploadData.append('data', JSON.stringify(formData));
+
+    try {
+      const response = await axios.post(`${backendUrl}/fill-pdf`, uploadData, {
+        responseType: 'blob',
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'filled_form.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
         <div className="bg-white shadow-xl rounded-lg overflow-hidden">
           <div className="px-6 py-8 bg-indigo-600 text-white">
             <h1 className="text-3xl font-bold">Document Auto-Fill Agent</h1>
-            <p className="mt-2 text-indigo-100">Upload your passport to automatically fill the form fields.</p>
+            <p className="mt-2 text-indigo-100">Upload your passport and a target PDF to automatically fill the form.</p>
           </div>
 
           <div className="p-8">
             {/* Upload Section */}
-            <div className="mb-10">
-              <label className="block text-sm font-medium text-gray-700 mb-4">
-                Step 1: Upload Passport / Identity Document
-              </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-indigo-400 transition-colors cursor-pointer relative">
-                <div className="space-y-1 text-center">
-                  {loading ? (
-                    <Loader2 className="mx-auto h-12 w-12 text-indigo-500 animate-spin" />
-                  ) : uploadStatus === 'success' ? (
-                    <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
-                  ) : (
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  )}
-                  <div className="flex text-sm text-gray-600">
-                    <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                      <span>{loading ? 'Processing...' : uploadStatus === 'success' ? 'Document Processed' : 'Upload a file'}</span>
-                      <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileUpload} accept="image/*" />
-                    </label>
-                    {!loading && uploadStatus !== 'success' && <p className="pl-1 text-gray-500">or drag and drop</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-4">
+                  Step 1: Upload Passport / Identity Document
+                </label>
+                <div className="mt-1 flex justify-center px-4 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-indigo-400 transition-colors cursor-pointer relative">
+                  <div className="space-y-1 text-center">
+                    {loading ? (
+                      <Loader2 className="mx-auto h-10 w-10 text-indigo-500 animate-spin" />
+                    ) : uploadStatus === 'success' ? (
+                      <CheckCircle2 className="mx-auto h-10 w-10 text-green-500" />
+                    ) : (
+                      <Upload className="mx-auto h-10 w-10 text-gray-400" />
+                    )}
+                    <div className="flex text-xs text-gray-600 justify-center">
+                      <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none">
+                        <span>{loading ? 'Processing...' : uploadStatus === 'success' ? 'Document Processed' : 'Upload document'}</span>
+                        <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileUpload} accept="image/*" />
+                      </label>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-4">
+                  Step 2: Upload Target PDF Form
+                </label>
+                <div className="mt-1 flex justify-center px-4 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-indigo-400 transition-colors cursor-pointer relative">
+                  <div className="space-y-1 text-center">
+                    {pdfFile ? (
+                      <FileText className="mx-auto h-10 w-10 text-green-500" />
+                    ) : (
+                      <Upload className="mx-auto h-10 w-10 text-gray-400" />
+                    )}
+                    <div className="flex text-xs text-gray-600 justify-center">
+                      <label htmlFor="pdf-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none">
+                        <span>{pdfFile ? pdfFile.name : 'Upload PDF Form'}</span>
+                        <input id="pdf-upload" name="pdf-upload" type="file" className="sr-only" onChange={handlePdfFileChange} accept="application/pdf" />
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -184,8 +246,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="pt-5">
-                <div className="flex justify-end">
+              <div className="pt-5 flex flex-wrap gap-4 justify-end">
                   <button
                     type="button"
                     className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -193,12 +254,20 @@ function App() {
                     Cancel
                   </button>
                   <button
+                    type="button"
+                    onClick={handleGeneratePdf}
+                    disabled={pdfLoading || !pdfFile}
+                    className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400"
+                  >
+                    {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                    Generate Filled PDF
+                  </button>
+                  <button
                     type="submit"
-                    className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     Save & Continue
                   </button>
-                </div>
               </div>
             </div>
           </div>

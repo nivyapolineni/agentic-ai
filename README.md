@@ -14,7 +14,7 @@ This project provides an agent that automatically fills out relatable fields whe
 1. Navigate to the `backend/` directory.
 2. Install dependencies:
    ```bash
-   pip install fastapi uvicorn python-multipart easyocr mrz pillow numpy
+   pip install fastapi uvicorn python-multipart easyocr mrz pillow numpy pymupdf
    ```
 3. Run the server:
    ```bash

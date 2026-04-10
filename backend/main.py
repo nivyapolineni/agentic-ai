@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
 import easyocr
@@ -7,6 +8,8 @@ import PIL.Image
 import io
 import numpy as np
 import re
+import json
+import fitz  # PyMuPDF
 from mrz.checker.td3 import TD3CodeChecker
 
 app = FastAPI()
@@ -103,6 +106,51 @@ async def process_passport(file: UploadFile = File(...)):
         return passport_data
     except Exception as e:
         print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/fill-pdf")
+async def fill_pdf(
+    template: UploadFile = File(...),
+    data: str = Form(...)
+):
+    try:
+        # Parse data
+        form_values = json.loads(data)
+
+        # Read PDF template
+        contents = await template.read()
+        doc = fitz.open(stream=io.BytesIO(contents), filetype="pdf")
+
+        # Map our data to typical form field names (simplified)
+        field_mapping = {
+            "firstName": ["FirstName", "GivenName", "First Name"],
+            "lastName": ["LastName", "FamilyName", "Last Name"],
+            "dob": ["DOB", "DateOfBirth", "Date of Birth"],
+            "nationality": ["Nationality", "Country", "Country of Birth"],
+            "passportNumber": ["PassportNo", "PassportNumber", "Passport Number"]
+        }
+
+        for page in doc:
+            for field in page.widgets():
+                for key, value in form_values.items():
+                    if key in field_mapping:
+                        for possible_name in field_mapping[key]:
+                            if possible_name.lower() in field.field_name.lower():
+                                field.field_value = str(value)
+                                field.update()
+
+        output_stream = io.BytesIO()
+        doc.save(output_stream)
+        doc.close()
+        output_stream.seek(0)
+
+        return Response(
+            content=output_stream.read(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=filled_form.pdf"}
+        )
+    except Exception as e:
+        print(f"Error filling PDF: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
