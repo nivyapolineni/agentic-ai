@@ -14,6 +14,10 @@ from mrz.checker.td3 import TD3CodeChecker
 
 app = FastAPI()
 
+@app.get("/")
+async def root():
+    return {"message": "Document Auto-Fill API is running. Use the frontend at http://localhost:5173"}
+
 class PassportData(BaseModel):
     firstName: Optional[str] = ""
     lastName: Optional[str] = ""
